@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TaskFlow (minimal)</title>
+  </head>
+  <body>
+    <h1>TaskFlow (minimal)</h1>
+    <p>API疎通チェック：</p>
+    <button id="btn">/api/healthz を叩く</button>
+    <pre id="out"></pre>
+
+    <script>
+      const btn = document.getElementById("btn");
+      const out = document.getElementById("out");
+      btn.addEventListener("click", async () => {
+        out.textContent = "loading...";
+        const res = await fetch("/api/healthz");
+        out.textContent = JSON.stringify(await res.json(), null, 2);
+      });
+    </script>
+  </body>
+</html>
