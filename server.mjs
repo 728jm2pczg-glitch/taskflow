@@ -2,6 +2,7 @@ import http from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,11 +10,13 @@ const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
 
+// in-memory tasks
+let tasks = [];
+
 function json(res, status, obj) {
-  const body = JSON.stringify(obj);
+  const body = status === 204 ? "" : JSON.stringify(obj);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Content-Length": Buffer.byteLength(body),
     "Cache-Control": "no-store",
   });
   res.end(body);
@@ -40,26 +43,120 @@ function contentType(filePath) {
   );
 }
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+async function readJsonBody(req, limitBytes = 1024 * 1024) {
+  return await new Promise((resolve, reject) => {
+    let size = 0;
+    let data = "";
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > limitBytes) {
+        reject(new Error("Payload too large"));
+        req.destroy();
+        return;
+      }
+      data += chunk.toString("utf8");
+    });
+    req.on("end", () => {
+      if (!data) return resolve(null);
+      try {
+        resolve(JSON.parse(data));
+      } catch {
+        reject(new Error("Invalid JSON"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
 
-  if (url.pathname === "/api/healthz" && req.method === "GET") {
+function notFound(res) {
+  sendText(res, 404, "Not Found");
+}
+
+const server = http.createServer(async (req, res) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+
+  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+  const method = req.method ?? "GET";
+  const pathname = url.pathname;
+
+  // health
+  if (pathname === "/api/healthz" && method === "GET") {
     return json(res, 200, { ok: true, node: process.version });
   }
 
-  let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
+  // list
+  if (pathname === "/api/tasks" && method === "GET") {
+    return json(res, 200, { tasks });
+  }
+
+  // create
+  if (pathname === "/api/tasks" && method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const title = body?.title;
+      if (typeof title !== "string" || title.trim().length === 0) {
+        return json(res, 400, { error: "title is required" });
+      }
+      const task = {
+        id: randomUUID(),
+        title: title.trim(),
+        done: false,
+        createdAt: new Date().toISOString(),
+      };
+      tasks = [task, ...tasks];
+      return json(res, 201, { task });
+    } catch (e) {
+      return json(res, 400, { error: e.message });
+    }
+  }
+
+  // update/delete: /api/tasks/:id
+  const m = pathname.match(/^\/api\/tasks\/([^/]+)$/);
+  if (m) {
+    const id = m[1];
+
+    if (method === "PATCH") {
+      try {
+        const body = await readJsonBody(req);
+        if (typeof body?.done !== "boolean") {
+          return json(res, 400, { error: "done(boolean) is required" });
+        }
+        const idx = tasks.findIndex((t) => t.id === id);
+        if (idx === -1) return json(res, 404, { error: "not found" });
+
+        tasks[idx] = { ...tasks[idx], done: body.done };
+        return json(res, 200, { task: tasks[idx] });
+      } catch (e) {
+        return json(res, 400, { error: e.message });
+      }
+    }
+
+    if (method === "DELETE") {
+      const before = tasks.length;
+      tasks = tasks.filter((t) => t.id !== id);
+      if (tasks.length === before) return json(res, 404, { error: "not found" });
+      return json(res, 204, {});
+    }
+
+    return json(res, 405, { error: "Method Not Allowed" });
+  }
+
+  // static
+  let filePath = pathname === "/" ? "/index.html" : pathname;
   filePath = path.normalize(filePath).replace(/^(\.\.(\/|\\|$))+/, "");
   const absPath = path.join(PUBLIC_DIR, filePath);
 
   try {
     const st = await stat(absPath);
-    if (!st.isFile()) return sendText(res, 404, "Not Found");
+    if (!st.isFile()) return notFound(res);
 
     const data = await readFile(absPath);
     res.writeHead(200, { "Content-Type": contentType(absPath) });
     res.end(data);
   } catch {
-    sendText(res, 404, "Not Found");
+    notFound(res);
   }
 });
 
