@@ -26,3 +26,18 @@ Node.js（標準モジュール）だけで動くタスク管理の最小アプ�
 ## Setup（準備）
 ```bash
 npm install
+```
+
+## Typecheck
+```bash
+npm run typecheck
+```
+
+## Git commit & push
+```bash
+git add README.md
+git commit -m "document typecheck"
+git push
+```
+
+
