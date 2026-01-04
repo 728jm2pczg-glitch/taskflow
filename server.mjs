@@ -3,6 +3,7 @@ import { readFile, stat, mkdir, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
+import { openDb } from "./db.mjs";
 
 // @ts-check
 /** @typedef {{ id: string, title: string, done: boolean, createdAt: string }} Task */
@@ -12,6 +13,9 @@ const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
+const DB_PATH = process.env.TASKFLOW_DB_PATH ?? path.join(process.cwd(), "data", "taskflow.db");
+const db = openDb(DB_PATH);
+
 
 const DATA_DIR = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)

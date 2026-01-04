@@ -28,6 +28,7 @@ s.close(() => resolve(port));
  * @param {number} [timeoutMs]
  */
 async function waitForReady(url, timeoutMs = 5000) {
+
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -44,7 +45,11 @@ test("GET /api/healthz returns ok", async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "taskflow-"));
 
   const child = spawn(process.execPath, ["server.mjs"], {
-    env: { ...process.env, PORT: String(port), DATA_DIR: dataDir },
+    env: {
+    ...process.env,
+    PORT: String(port),
+    TASKFLOW_DB_PATH: path.join(dataDir, "taskflow.db"),
+  },
     stdio: "ignore",
   });
 
@@ -64,7 +69,11 @@ test("POST /api/tasks creates a task", async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "taskflow-"));
 
   const child = spawn(process.execPath, ["server.mjs"], {
-    env: { ...process.env, PORT: String(port), DATA_DIR: dataDir },
+    env: {
+    ...process.env,
+    PORT: String(port),
+    TASKFLOW_DB_PATH: path.join(dataDir, "taskflow.db"),
+  },
     stdio: "ignore",
   });
 
