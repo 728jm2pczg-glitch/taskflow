@@ -4,3 +4,6 @@ node_modules/
 data/tasks.json
 data/*.tmp
 *.tmp
+data/*.db
+data/*.db-*
+data/*.sqlite*
